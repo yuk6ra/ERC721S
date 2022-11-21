@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 // import "./SubscManager.sol";
 import "hardhat/console.sol";
 
-contract ERC721S is ERC721, Ownable {
+contract ERC721SPlans is ERC721, Ownable {
     
     uint256 public timestamp;
     uint256 public totalSupply;

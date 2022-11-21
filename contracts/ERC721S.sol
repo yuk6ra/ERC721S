@@ -3,14 +3,12 @@
 pragma solidity ^0.8.17;
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-// import "./SubscManager.sol";
 import "hardhat/console.sol";
 
 contract ERC721S is ERC721, Ownable {
     
     uint256 public timestamp;
     uint256 public totalSupply;
-    address payable receiveAddr;
 
     struct Subscription {
         address owner; /// @dev NFTを持っているオーナーのアドレス
@@ -23,12 +21,13 @@ contract ERC721S is ERC721, Ownable {
     }
 
     struct Plan {
+        address payable beneficiary;
         uint256 period; /// @dev いくつの設計にするのか
         uint256 price;
         uint256 entryCount;
     }
 
-    Plan public subscPlan;
+    Plan public plan;
 
     /// @dev Token Idで管理するほうがわかりやすそう
     mapping(uint256 => Subscription) public subscriptions;
@@ -37,96 +36,160 @@ contract ERC721S is ERC721, Ownable {
         uint256 _period,
         uint256 _price
     ) ERC721("Test", "TST") {
-        initSubscriptionPlan(_period, _price);
+        // _initSubscPlan(_period, _price);
+        _dafaultSubscPlan();
     }
     
-    function mint() external {
+    function mint() public{
         _safeMint(msg.sender, totalSupply);
-        _createSubscription(totalSupply);
+        _createSubsc(totalSupply);
 
         totalSupply++;
     }
 
+    function _dafaultSubscPlan() internal virtual onlyOwner{
+        Plan memory _plan = Plan({
+            beneficiary: payable(msg.sender),
+            period: 31 days,
+            price: 0 ether,
+            entryCount: 0
+        });
+        plan = _plan;
+    }
+
     /// @dev 初期化=> Constructorのときに処理を行う
-    function initSubscriptionPlan(uint256 _period, uint256 _price) public onlyOwner{
-        receiveAddr = payable(msg.sender);
-        console.log(receiveAddr);
-        Plan memory plan = Plan({
+    function _initSubscPlan(uint256 _period, uint256 _price) internal virtual onlyOwner{
+        Plan memory _plan = Plan({
+            beneficiary: payable(msg.sender),
             period: _period,
             price: _price,
             entryCount: 0
         });
-        subscPlan = plan;
+        plan = _plan;
     }
 
-    /// @dev 情報を更新する
+    function transferBeneficiary(address payable newBeneficiary) public virtual onlyOwner {
+        require(newBeneficiary != address(0x0), "Not newBeneficiary");
+        plan.beneficiary = newBeneficiary;
+    }
+
+    /// @dev プラン情報を更新する
     function setPlan(
         uint256 _period,
         uint256 _price
-    ) public onlyOwner {
+    ) public virtual onlyOwner {
         // require(plan.period != 0, "No Plan");
-        subscPlan.period = _period;
-        subscPlan.price = _price;
+        plan.period = _period;
+        plan.price = _price;
     }
 
-    function getPlan() public view returns (Plan memory) {
-        require(subscPlan.period != 0, "No Plan");
-        return subscPlan;
+    function getPlan() public view virtual returns (Plan memory) {
+        require(_existsPlan(), "No Plan");
+        return plan;
+    }
+
+    function _existsPlan() internal view virtual returns (bool) {
+        return plan.period != 0;
+    }
+
+    function _existsSubsc(uint256 _tokenId) internal view virtual returns (bool) {
+        return subscriptions[_tokenId].entry;
+    }
+
+    function isValidSubsc(uint256 _tokenId) public view virtual returns (bool) {
+        return subscriptions[_tokenId].endTime >= block.timestamp;
+    }
+
+    function price() external view virtual returns (uint256) {
+        return plan.price;
+    }
+
+    function period() external view virtual returns (uint256) {
+        return plan.period;
+    }
+
+    function beneficiary() external view virtual returns (address) {
+        return plan.beneficiary;
+    }
+
+    function entryCount() external view virtual returns (uint256) {
+        return plan.entryCount;
     }
 
     /// @dev トークンに紐づくサブスクリプションを作成
-    function _createSubscription(uint256 _tokenId) internal  {
-        require(!subscriptions[_tokenId].entry, "Already Entry");        
-        require(subscPlan.period != 0, "No Plan");
-        
-        require(msg.value >= subscPlan.price, "Not enought ETH");
-        // require(, "Not enought ETH");
-        // require(msg.value >= subscPlan.price, "Not ")
-        receiveAddr.transfer(msg.value);
+    function _createSubsc(uint256 _tokenId) internal virtual {
+        require(!_existsSubsc(_tokenId), "Already Entry");
+        require(_existsPlan(), "No Plan");
 
         Subscription memory subscription = Subscription({
             owner: msg.sender,
             paidAddress: msg.sender,
-            number: 1,
+            number: 0,
             createTime: block.timestamp,
-            updateTime: block.timestamp,
-            endTime: block.timestamp + subscPlan.period,
+            updateTime: 0,
+            endTime: 0,
             entry: true
         });
 
         subscriptions[_tokenId] = subscription;
-        subscPlan.entryCount++;
+        plan.entryCount++;
     }
 
     /// @dev サブスクリプションの更新処理
-    function updateSubscription(uint256 _tokenId) public payable {
-        require(subscriptions[_tokenId].entry, "No Entry");
+    function updateSubsc(uint256 _tokenId) public payable virtual {
+        require(_existsSubsc(_tokenId), "No Entry");
         require(
-            msg.value >= subscPlan.price,
+            msg.value >= plan.price,
             "Not enought ETH"
         );
+        require(!isValidSubsc(_tokenId), "Already pass");
+        
+        console.log(plan.price);
+        plan.beneficiary.transfer(msg.value);
         
         Subscription storage subsc = subscriptions[_tokenId];
-        subsc.updateTime = block.timestamp;
-        subsc.endTime = block.timestamp + subscPlan.period;
         subsc.paidAddress = msg.sender;
-
+        subsc.updateTime = block.timestamp;
+        subsc.endTime = block.timestamp + plan.period;
         subsc.number++;
     }
 
+    /// @dev サブスクリプションの更新処理
+    function updateSubsInAdvance(uint256 _tokenId, uint256 num) public payable virtual {
+        require(subscriptions[_tokenId].entry, "No Entry");
+        require(
+            msg.value >= plan.price * num,
+            "Not enought ETH"
+        );
+        require(
+            subscriptions[_tokenId].endTime <= block.timestamp,
+            "Already pass"
+        );
+        require(plan.price != 0, "Zero"); /// @dev ゼロは何回やってもゼロPrice
+        
+        console.log(plan.price * num);
+        plan.beneficiary.transfer(msg.value * num);
+        
+        Subscription storage subsc = subscriptions[_tokenId];
+        subsc.paidAddress = msg.sender;
+        subsc.updateTime = block.timestamp;
+        subsc.endTime = block.timestamp + plan.period * num;
+        subsc.number += num;
+    }
+
     /// @dev キャンセル処理→あまり必要がない
-    function cancelSubscription(uint256 tokenId) public {
+    function cancelSubscription(uint256 tokenId) public virtual {
         Subscription storage subsc = subscriptions[tokenId];
         subsc.entry = false;
     }
 
     /// @dev サブスクの登録ができているかどうか
-    function getEntry(uint256 tokenId) public view returns (bool) {
+    function getEntry(uint256 tokenId) public view virtual returns (bool) {
         return subscriptions[tokenId].entry;
     }
 
     /// @dev サブスク有効判定
-    function getJudgement(uint256 tokenId) public view returns (bool) {
+    function getJudgement(uint256 tokenId) public view virtual returns (bool) {
         console.log(block.timestamp,subscriptions[tokenId].endTime);
         return block.timestamp < subscriptions[tokenId].endTime;
     }
@@ -136,8 +199,12 @@ contract ERC721S is ERC721, Ownable {
     //     console.log(timestamp);
     // }
 
-    function getNow() external view returns (uint256){
+    function getNow() external view virtual returns (uint256){
         return block.timestamp;
+    }
+
+    function getExpDate(uint256 _tokenId) external view virtual returns (uint256){
+        return (subscriptions[_tokenId].endTime - block.timestamp) / 1 days;
     }
 
     // function getBool() external view returns (bool) {
