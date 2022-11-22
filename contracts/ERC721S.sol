@@ -3,10 +3,14 @@
 pragma solidity ^0.8.17;
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+// import "./SubscManager.sol";
 import "hardhat/console.sol";
+import "@openzeppelin/contracts/utils/Base64.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 
 contract ERC721S is ERC721, Ownable {
-    
+    using Strings for uint256;
+
     uint256 public timestamp;
     uint256 public totalSupply;
 
@@ -33,8 +37,6 @@ contract ERC721S is ERC721, Ownable {
     mapping(uint256 => Subscription) public subscriptions;
 
     constructor(
-        uint256 _period,
-        uint256 _price
     ) ERC721("Test", "TST") {
         // _initSubscPlan(_period, _price);
         _dafaultSubscPlan();
@@ -46,6 +48,44 @@ contract ERC721S is ERC721, Ownable {
 
         totalSupply++;
     }
+
+    // function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
+    //     require(_exists(tokenId), "Nonexistent token");
+    //     if (!isValidSubsc(tokenId)){
+    //         return notValidURI(tokenId);
+    //     }
+    //     return revealedURI(tokenId);
+    // }
+
+    // function revealedURI(uint256 tokenId) public pure returns (string memory) {
+    //     string memory json = string(
+    //         abi.encodePacked('data:application/json;base64,',
+    //             Base64.encode(bytes(abi.encodePacked(
+    //                 '{"name":"', "valid #", tokenId.toString(),
+    //                 // '", "description": "', description,
+    //                 '", "image" : "', "",
+    //                 '", "attributes" : [{"trait_type": "', "trait",'", "value": "', "valid",
+    //                 '"}]}'
+    //             )))
+    //         )
+    //     );
+    //     return json;
+    // }
+
+    // function notValidURI(uint256 tokenId) public pure returns (string memory) {
+    //     string memory json = string(
+    //         abi.encodePacked('data:application/json;base64,',
+    //             Base64.encode(bytes(abi.encodePacked(
+    //                 '{"name":"', "expired #", tokenId.toString(),
+    //                 // '", "description": "', description,
+    //                 '", "image" : "', "",
+    //                 '", "attributes" : [{"trait_type": "', "trait",'", "value": "', "expired",
+    //                 '"}]}'
+    //             )))
+    //         )
+    //     );
+    //     return json;
+    // }
 
     function _dafaultSubscPlan() internal virtual onlyOwner{
         Plan memory _plan = Plan({

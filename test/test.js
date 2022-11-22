@@ -1,18 +1,13 @@
 const { ethers } = require("hardhat");
 
-describe("DeployTest", function() {
+describe("Deploy", function() {
 
-    it("OK", async function () {
+    it("deploy", async function () {
         const contractFactory = await ethers.getContractFactory("ERC721S");
 
-        const contract = await contractFactory.deploy("10", "1000000000000000000");
+        const contract = await contractFactory.deploy();
 
         await contract.deployed();
-        await contract.mint(
-          {
-            value: hre.ethers.utils.parseEther("10"),
-          }
-        );
 
         console.log("Contract deployed to:", contract.address);
 
